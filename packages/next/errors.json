@@ -851,5 +851,10 @@
   "850": "metadataBase is not a valid URL: %s",
   "851": "Pass either `webpack` or `turbopack`, not both.",
   "852": "Only custom servers can pass `webpack`, `turbo`, or `turbopack`.",
-  "853": "Turbopack build failed"
+  "853": "Turbopack build failed",
+  "854": "`lockfileTryAcquire` is not supported by the wasm bindings.",
+  "855": "`lockfileTryAcquireSync` is not supported by the wasm bindings.",
+  "856": "`lockfileUnlock` is not supported by the wasm bindings.",
+  "857": "`lockfileUnlockSync` is not supported by the wasm bindings.",
+  "858": "An IO error occured while attempting to create and acquire the lockfile"
 }
