@@ -989,6 +989,7 @@ async fn apply_vendored_react_aliases_server(
         // This is used in the server runtime to import React Server Components.
         alias.extend(fxindexmap! {
             rcstr!("next/navigation") => rcstr!("next/dist/api/navigation.react-server"),
+            rcstr!("next/link") => rcstr!("next/dist/api/link.react-server"),
         });
     }
 
@@ -1018,6 +1019,7 @@ async fn rsc_aliases(
         // This is used in the server runtime to import React Server Components.
         alias.extend(fxindexmap! {
             rcstr!("next/navigation") => rcstr!("next/dist/api/navigation.react-server"),
+            rcstr!("next/link") => rcstr!("next/dist/api/link.react-server"),
         });
     }
 
