@@ -851,5 +851,13 @@
   "850": "metadataBase is not a valid URL: %s",
   "851": "Pass either `webpack` or `turbopack`, not both.",
   "852": "Only custom servers can pass `webpack`, `turbo`, or `turbopack`.",
-  "853": "Turbopack build failed"
+  "853": "Turbopack build failed",
+  "854": "<Link legacyBehavior> received a direct child that is either a Server Component, or JSX that was loaded with React.lazy(). This is not supported. Either remove legacyBehavior, or make the direct child of <Link> a Client Component.",
+  "855": "<Link legacyBehavior> received children that is either a Server Component, or JSX that was loaded with React.lazy(). This is not supported. Either remove legacyBehavior, or make the direct child of <Link> a Client Component.",
+  "856": "<Link legacyBehavior> received children that is either a Server Component, or JSX that wasloaded with React.lazy(). This is not supported. Either remove legacyBehavior, or make the direct child of <Link> a Client Component.",
+  "857": "<Link legacyBehavior> received a direct child that is either a Server Component, or JSX that was loaded with React.lazy(). This is not supported. Either remove legacyBehavior, or make the direct child a Client Component that renders the Link's \\`<a>\\` tag.",
+  "858": "\\`<Link legacyBehavior>\\` received a direct child that is either a Server Component, or JSX that was loaded with React.lazy(). This is not supported. Either remove legacyBehavior, or make the direct child a Client Component that renders the Link's \\`<a>\\` tag.",
+  "859": "You're passing either a Server Component or a Lazy Component into a <Link> that has legacyBehavior enabled. This is not supported. Either remove legacyBehavior, or make the direct child of <Link> a Client Component.",
+  "860": "You're passing a Lazy Component into a <Link> that has legacyBehavior enabled. This is not supported. Either remove legacyBehavior, or make the direct child of <Link> a Client Component.",
+  "861": "asdf"
 }
