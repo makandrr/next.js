@@ -37,6 +37,23 @@ describe('Middleware fetches with body', () => {
             res.json({ rawBody, body: req.body })
           }
         `,
+        'app/api/test-clone-limit/route.js': `
+          import { NextResponse } from 'next/server'
+
+          export async function POST(request) {
+            try {
+              const buffer = await request.arrayBuffer()
+              return NextResponse.json({
+                success: true,
+                bodySize: buffer.byteLength
+              })
+            } catch (err) {
+              return NextResponse.json({
+                error: err.message
+              }, { status: 500 })
+            }
+          }
+        `,
         'middleware.js': `
           import { NextResponse } from 'next/server';
 
@@ -306,6 +323,48 @@ describe('Middleware fetches with body', () => {
       if (res.status !== 500) {
         throw err
       }
+    }
+  })
+
+  describe('cloneBodyStream size limit', () => {
+    if (!(global as any).isNextDeploy) {
+      it('should reject body over 50MB when cloning for middleware', async () => {
+        const bodySize = 51 * 1024 * 1024
+        const body = 'Z'.repeat(bodySize)
+
+        const res = await fetchViaHTTP(
+          next.url,
+          '/api/test-clone-limit',
+          {},
+          {
+            body,
+            method: 'POST',
+          }
+        )
+
+        expect(res.status).toBe(400)
+      })
+
+      it('should accept body under 50MB when cloning for middleware', async () => {
+        const bodySize = 10 * 1024 * 1024
+        const body = 'Y'.repeat(bodySize)
+
+        const res = await fetchViaHTTP(
+          next.url,
+          '/api/test-clone-limit',
+          {},
+          {
+            body,
+            method: 'POST',
+          }
+        )
+
+        // Should succeed because we're under the 50MB clone limit
+        expect(res.status).toBe(200)
+        const data = await res.json()
+        expect(data.success).toBe(true)
+        expect(data.bodySize).toBe(bodySize)
+      })
     }
   })
 })
