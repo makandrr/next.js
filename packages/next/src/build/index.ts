@@ -3279,6 +3279,17 @@ export default async function build(
               }
             }
 
+            // After processing all static prerendered routes, check if any had revalidate: 0
+            // and update the parent page accordingly. This handles the case where
+            // generateStaticParams was used but the routes turned out to be dynamic.
+            if (hasRevalidateZero && pageInfos.get(page)?.isSSG) {
+              pageInfos.set(page, {
+                ...(pageInfos.get(page) as PageInfo),
+                isStatic: false,
+                isSSG: false,
+              })
+            }
+
             if (!hasRevalidateZero && isDynamicRoute(page)) {
               // When PPR fallbacks aren't used, we need to include it here. If
               // they are enabled, then it'll already be included in the
