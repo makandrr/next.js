@@ -105,7 +105,7 @@ pub async fn get_app_page_entry(
 
     let file = File::from(result.build());
     let mut ident = source.ident().owned().await?;
-    ident.query = RcStr::from(format!("?{query}"));
+    ident.set_query(RcStr::from(format!("?{query}")));
     let source = VirtualSource::new_with_ident(ident, AssetContent::file(file.into()));
 
     let mut rsc_entry = module_asset_context

@@ -730,7 +730,7 @@ impl Module for EcmascriptModuleAsset {
                 .await?
         }
         ident.add_modifier(rcstr!("ecmascript"));
-        ident.layer = Some(self.asset_context.into_trait_ref().await?.layer());
+        ident.set_layer(self.asset_context.into_trait_ref().await?.layer());
         Ok(ident.cell())
     }
 

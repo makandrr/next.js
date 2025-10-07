@@ -164,7 +164,7 @@ impl OutputAsset for PageLoaderAsset {
             // `static/chunks/pages/page2.js`, so that the dev runtime can request it at a known
             // path.
             // https://github.com/vercel/next.js/blob/84873e00874e096e6c4951dcf070e8219ed414e5/packages/next/src/client/route-loader.ts#L256-L271
-            Ok(ident.path.cell())
+            Ok(ident.path.clone().cell())
         } else {
             Ok(this
                 .chunking_context

@@ -220,7 +220,7 @@ impl Module for CachedExternalModule {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let fs = VirtualFileSystem::new_with_name(rcstr!("externals"));
         let mut ident = AssetIdent::from_path(fs.root().await?.join(&self.request)?);
-        ident.layer = Some(*EXTERNAL_LAYER);
+        ident.set_layer(*EXTERNAL_LAYER);
         ident.add_modifier(self.request.clone());
         ident.add_modifier(self.external_type.to_string().into());
         Ok(ident.cell())

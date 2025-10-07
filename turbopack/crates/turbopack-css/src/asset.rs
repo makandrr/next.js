@@ -128,7 +128,7 @@ impl Module for CssModuleAsset {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let mut ident = self.source.ident().owned().await?;
         ident.add_modifier(rcstr!("css"));
-        ident.layer = Some(self.asset_context.into_trait_ref().await?.layer());
+        ident.set_layer(self.asset_context.into_trait_ref().await?.layer());
         if let Some(import_context) = self.import_context {
             ident.add_modifier(import_context.modifier().owned().await?)
         }

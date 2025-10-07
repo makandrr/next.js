@@ -1,4 +1,10 @@
-use std::{fmt::Write, mem::take};
+use std::{
+    fmt::{Debug, Write},
+    hash::Hash,
+    mem::take,
+    ops::Deref,
+    sync::Arc,
+};
 
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -105,19 +111,15 @@ macro_rules! new_layer {
     };
 }
 
-// TODO: In a large build there are many 10s of thousands of AssetIdents and they get cloned a lot
-// on top of that. Most of the data is in RcStr instances which is cheap to clone but the raw struct
-// is large.  Consider ways to 'compress' the size of the struct.
-//
-// * Eagerly flatten things like 'assets', 'modifiers', query, fragment into a single string.  Many
-//   of these are 'write-only' so we can use that to our advantage.
-// * model it as an Arc<AssetIdent> to make it cheaper to clone.
-// * store the vecs as Option<ThinArc<T>> to make it smaller and cheaper to clone since they are
-//   usually empty or you are just modifying one of them.
+// AssetIdent is wrapped in Arc to make cloning extremely cheap (8 bytes + atomic increment)
+// In large builds there are tens of thousands of AssetIdents that get cloned frequently.
+// The tradeoff is one extra pointer indirection on field access, but this is negligible
+// compared to the clone performance improvement.
 
-#[turbo_tasks::value(shared)]
-#[derive(Clone, Debug, Hash, TaskInput)]
-pub struct AssetIdent {
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, NonLocalValue, TaskInput,
+)]
+pub struct AssetIdentInner {
     /// The primary path of the asset
     pub path: FileSystemPath,
     /// The query string of the asset this is either the empty string or a query string that starts
@@ -140,22 +142,63 @@ pub struct AssetIdent {
     pub content_type: Option<RcStr>,
 }
 
+#[turbo_tasks::value(shared, eq = "manual")]
+#[derive(Clone)]
+pub struct AssetIdent(pub(crate) Arc<AssetIdentInner>);
+
+impl Deref for AssetIdent {
+    type Target = AssetIdentInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+// Manual implementations for Arc wrapper
+impl Debug for AssetIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Hash for AssetIdent {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl PartialEq for AssetIdent {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for AssetIdent {}
+
+impl TaskInput for AssetIdent {
+    fn is_transient(&self) -> bool {
+        false
+    }
+}
+
 impl AssetIdent {
     fn check_non_empty_and_no_commas(modifier: &RcStr) {
         debug_assert!(!modifier.is_empty(), "modifiers cannot be empty.");
         debug_assert!(!modifier.contains(","), "modifiers cannot contain commas.");
     }
     pub fn add_modifier(&mut self, modifier: RcStr) {
-        if self.modifiers.is_empty() {
+        if self.0.modifiers.is_empty() {
             Self::check_non_empty_and_no_commas(&modifier);
-            self.modifiers = modifier;
+            let inner = Arc::make_mut(&mut self.0);
+            inner.modifiers = modifier;
             return;
         }
         self.add_modifiers(std::iter::once(modifier));
     }
 
     pub fn add_modifiers(&mut self, new_modifiers: impl IntoIterator<Item = RcStr>) {
-        let mut modifiers = take(&mut self.modifiers).into_owned();
+        let inner = Arc::make_mut(&mut self.0);
+        let mut modifiers = take(&mut inner.modifiers).into_owned();
         for modifier in new_modifiers {
             Self::check_non_empty_and_no_commas(&modifier);
             if !modifiers.is_empty() {
@@ -163,11 +206,12 @@ impl AssetIdent {
             }
             modifiers.push_str(&modifier);
         }
-        self.modifiers = RcStr::from(modifiers);
+        inner.modifiers = RcStr::from(modifiers);
     }
 
     pub async fn add_asset(&mut self, key: RcStr, asset: &AssetIdent) -> Result<()> {
-        let mut assets = take(&mut self.assets).into_owned();
+        let inner = Arc::make_mut(&mut self.0);
+        let mut assets = take(&mut inner.assets).into_owned();
         if !assets.is_empty() {
             assets.push_str(", ");
         }
@@ -178,12 +222,13 @@ impl AssetIdent {
         )
         .expect("failed to write to assets");
 
-        self.assets = RcStr::from(assets);
+        inner.assets = RcStr::from(assets);
         Ok(())
     }
     pub async fn add_assets(&mut self, items: Vec<(RcStr, Vc<AssetIdent>)>) -> Result<()> {
         debug_assert!(!items.is_empty(), "assets cannot be empty.");
-        let mut assets = take(&mut self.assets).into_owned();
+        let inner = Arc::make_mut(&mut self.0);
+        let mut assets = take(&mut inner.assets).into_owned();
         for (key, asset) in items {
             if !assets.is_empty() {
                 assets.push_str(", ");
@@ -195,7 +240,7 @@ impl AssetIdent {
             )
             .expect("failed to write to assets");
         }
-        self.assets = RcStr::from(assets);
+        inner.assets = RcStr::from(assets);
         Ok(())
     }
 
@@ -205,15 +250,17 @@ impl AssetIdent {
             // shouldn't change the ident
             return;
         }
-        if self.parts.is_empty() {
-            self.parts = RcStr::from(part.to_string());
+        if self.0.parts.is_empty() {
+            let inner = Arc::make_mut(&mut self.0);
+            inner.parts = RcStr::from(part.to_string());
             return;
         }
         self.add_parts(std::iter::once(part));
     }
 
     pub fn add_parts(&mut self, new_parts: impl IntoIterator<Item = ModulePart>) {
-        let mut parts = take(&mut self.parts).into_owned();
+        let inner = Arc::make_mut(&mut self.0);
+        let mut parts = take(&mut inner.parts).into_owned();
         for part in new_parts {
             if matches!(part, ModulePart::Facade) {
                 // facade is not included in ident as switching between facade and non-facade
@@ -225,17 +272,52 @@ impl AssetIdent {
             }
             parts.push_str(&part.to_string());
         }
-        self.parts = RcStr::from(parts);
+        inner.parts = RcStr::from(parts);
     }
 
     pub async fn rename_as_ref(&mut self, pattern: &str) -> Result<()> {
-        let root = self.path.root().await?;
-        self.path = root.join(&pattern.replace('*', &self.path.path))?;
+        let inner = Arc::make_mut(&mut self.0);
+        let root = inner.path.root().await?;
+        inner.path = root.join(&pattern.replace('*', &inner.path.path))?;
         Ok(())
     }
+
+    /// Sets the query string of the asset
+    pub fn set_query(&mut self, query: RcStr) {
+        debug_assert!(!query.is_empty(), "query cannot be empty.");
+        let inner = Arc::make_mut(&mut self.0);
+        inner.query = query;
+    }
+
+    /// Sets the fragment of the asset
+    pub fn set_fragment(&mut self, fragment: RcStr) {
+        debug_assert!(!fragment.is_empty(), "fragment cannot be empty.");
+        let inner = Arc::make_mut(&mut self.0);
+        inner.fragment = fragment;
+    }
+
+    /// Sets the content type of the asset
+    pub fn set_content_type(&mut self, content_type: RcStr) {
+        debug_assert!(!content_type.is_empty(), "content type cannot be empty.");
+        let inner = Arc::make_mut(&mut self.0);
+        inner.content_type = Some(content_type);
+    }
+
+    /// Sets the layer of the asset
+    pub fn set_layer(&mut self, layer: Layer) {
+        let inner = Arc::make_mut(&mut self.0);
+        inner.layer = Some(layer);
+    }
+
+    /// Sets the path of the asset
+    pub fn set_path(&mut self, path: FileSystemPath) {
+        let inner = Arc::make_mut(&mut self.0);
+        inner.path = path;
+    }
+
     /// Creates an [AssetIdent] from a [FileSystemPath]
     pub fn from_path(path: FileSystemPath) -> Self {
-        AssetIdent {
+        Self(Arc::new(AssetIdentInner {
             path,
             query: RcStr::default(),
             fragment: RcStr::default(),
@@ -244,7 +326,7 @@ impl AssetIdent {
             parts: RcStr::default(),
             layer: None,
             content_type: None,
-        }
+        }))
     }
 
     pub async fn path(self: Vc<Self>) -> Result<FileSystemPath> {
@@ -297,16 +379,13 @@ impl AssetIdent {
 
         let mut hasher = Xxh3Hash64Hasher::new();
         let mut has_hash = false;
-        let AssetIdent {
-            path: _,
-            query,
-            fragment,
-            assets,
-            modifiers,
-            parts,
-            layer,
-            content_type,
-        } = self;
+        let query = &self.query;
+        let fragment = &self.fragment;
+        let assets = &self.assets;
+        let modifiers = &self.modifiers;
+        let parts = &self.parts;
+        let layer = &self.layer;
+        let content_type = &self.content_type;
         if !query.is_empty() {
             0_u8.deterministic_hash(&mut hasher);
             query.deterministic_hash(&mut hasher);

@@ -52,7 +52,7 @@ impl Source for DataUriSource {
             )))[0..6]
         );
         let mut ident = AssetIdent::from_path(self.lookup_path.join(&filename)?);
-        ident.content_type = Some(content_type);
+        ident.set_content_type(content_type);
         Ok(ident.cell())
     }
 }

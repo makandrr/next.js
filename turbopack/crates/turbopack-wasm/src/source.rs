@@ -55,7 +55,8 @@ impl Source for WebAssemblySource {
             WebAssemblySourceType::Binary => self.source.ident(),
             WebAssemblySourceType::Text => {
                 let mut ident = self.source.ident().owned().await?;
-                ident.path = ident.path.append("_.wasm")?;
+                let new_path = ident.path.append("_.wasm")?;
+                ident.set_path(new_path);
                 ident.cell()
             }
         })
