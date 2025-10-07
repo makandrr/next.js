@@ -1455,13 +1455,13 @@ export default class NextNodeServer extends BaseServer<
       const middlewareModule = await this.loadNodeMiddleware()
 
       if (middlewareModule) {
+        const matchers = middlewareModule.config?.matchers || [
+          { regexp: '.*', originalSource: '/:path*' },
+        ]
         return {
-          match: getMiddlewareRouteMatcher(
-            middlewareModule.config?.matchers || [
-              { regexp: '.*', originalSource: '/:path*' },
-            ]
-          ),
+          match: getMiddlewareRouteMatcher(matchers),
           page: '/',
+          matchers,
         }
       }
 
@@ -1471,6 +1471,7 @@ export default class NextNodeServer extends BaseServer<
     return {
       match: getMiddlewareMatcher(middleware),
       page: '/',
+      matchers: middleware.matchers,
     }
   }
 
@@ -1615,6 +1616,17 @@ export default class NextNodeServer extends BaseServer<
     url?: string
   }) {}
 
+  protected isInternalRequest(pathname: string): boolean {
+    const { basePath } = this.nextConfig
+
+    let checkPath = pathname
+    if (basePath && pathname.startsWith(basePath)) {
+      checkPath = pathname.slice(basePath.length)
+    }
+
+    return checkPath.startsWith('/_next/')
+  }
+
   /**
    * This method gets all middleware matchers and execute them when the request
    * matches. It will make sure that each middleware exists and is compiled and
@@ -1676,6 +1688,18 @@ export default class NextNodeServer extends BaseServer<
       return { finished: false }
     }
     if (!(await this.hasMiddleware(middleware.page))) {
+      return { finished: false }
+    }
+
+    // Skip middleware for internal routes when using default catch-all matcher
+    if (
+      this.isInternalRequest(params.parsedUrl.pathname) &&
+      middleware.matchers?.length === 1 &&
+      middleware.matchers[0].originalSource === '/:path*' &&
+      // TODO: Can we align the default matcher to be either `^/.*$` or `.*`?
+      (middleware.matchers[0].regexp === '^/.*$' ||
+        middleware.matchers[0].regexp === '.*')
+    ) {
       return { finished: false }
     }
 
